@@ -12,7 +12,7 @@ class SupabaseService {
     this.supabase = createClient(supabaseUrl, supabaseKey);
   }
 
-  // Save user account information - SIMPLIFIED VERSION
+  // Save user account information
   async saveUserAccount(userId, accountData, accessToken) {
     try {
       const accountRecord = {
@@ -72,7 +72,7 @@ class SupabaseService {
     }
   }
 
-  // Save transactions for an account - SIMPLIFIED VERSION
+  // Save transactions for an account
   async saveTransactions(accountDbId, transactions) {
     try {
       console.log(`Saving ${transactions.length} transactions for account ${accountDbId}`);
@@ -137,46 +137,58 @@ class SupabaseService {
     }
   }
 
-  // Get transactions for user accounts - SIMPLIFIED VERSION
+  // Get transactions for user accounts - FIXED SIMPLE VERSION
   async getUserTransactions(userId, limit = 100, offset = 0) {
     try {
       console.log(`Getting transactions for user ${userId}`);
       
-      // First get user's account IDs
+      // Step 1: Get user's account IDs
       const { data: accounts, error: accountsError } = await this.supabase
         .from('user_accounts')
-        .select('id')
+        .select('id, account_name, account_type')
         .eq('user_id', userId)
         .eq('is_active', true);
 
-      if (accountsError) throw accountsError;
+      if (accountsError) {
+        console.error('Error getting user accounts:', accountsError);
+        throw accountsError;
+      }
       
       if (!accounts || accounts.length === 0) {
         console.log('No accounts found for user');
         return [];
       }
 
+      console.log(`Found ${accounts.length} accounts for user`);
       const accountIds = accounts.map(acc => acc.id);
-      console.log('Account IDs:', accountIds);
 
-      // Get transactions for these accounts
-      const { data, error } = await this.supabase
+      // Step 2: Get transactions for these accounts
+      const { data: transactions, error: transactionsError } = await this.supabase
         .from('transactions')
-        .select(`
-          *,
-          user_accounts!inner(account_name, account_type)
-        `)
+        .select('*')
         .in('account_id', accountIds)
         .order('date', { ascending: false })
         .limit(limit);
 
-      if (error) {
-        console.error('Supabase getUserTransactions error:', error);
-        throw error;
+      if (transactionsError) {
+        console.error('Error getting transactions:', transactionsError);
+        throw transactionsError;
       }
+
+      // Step 3: Add account info to each transaction
+      const transactionsWithAccounts = (transactions || []).map(txn => {
+        const account = accounts.find(acc => acc.id === txn.account_id);
+        return {
+          ...txn,
+          user_accounts: {
+            account_name: account?.account_name || 'Unknown Account',
+            account_type: account?.account_type || 'unknown'
+          }
+        };
+      });
       
-      console.log(`Found ${data?.length || 0} transactions for user`);
-      return data || [];
+      console.log(`Returning ${transactionsWithAccounts.length} transactions for user`);
+      return transactionsWithAccounts;
     } catch (error) {
       console.error('Error getting user transactions:', error);
       throw error;
