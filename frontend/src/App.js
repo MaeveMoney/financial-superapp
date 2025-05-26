@@ -8,9 +8,18 @@ function App() {
   const [userId, setUserId] = useState(null);
 
   const handlePlaidSuccess = (data) => {
-    console.log('Connected bank data:', data);
+    console.log('=== APP.JS RECEIVED DATA ===');
+    console.log('Full data received:', JSON.stringify(data, null, 2));
+    console.log('User ID from data:', data.user_id);
+    console.log('Transactions imported:', data.transactions_imported);
+    
     setConnectedData(data);
     setUserId(data.user_id);
+    
+    if (!data.user_id) {
+      console.error('❌ APP.JS ERROR: No user_id received!');
+      console.error('Available fields:', Object.keys(data));
+    }
   };
 
   return (
@@ -47,11 +56,18 @@ function App() {
                     <Text fontSize="sm" color="blue.600">
                       Imported {connectedData.transactions_imported} transactions
                     </Text>
+                    <Text fontSize="sm" color="purple.600">
+                      User ID: {userId || 'MISSING!'}
+                    </Text>
                   </VStack>
                 </TabPanel>
                 
                 <TabPanel>
-                  <TransactionList userId={userId} />
+                  {userId ? (
+                    <TransactionList userId={userId} />
+                  ) : (
+                    <Text color="red.500">Error: No user ID available to load transactions</Text>
+                  )}
                 </TabPanel>
                 
                 <TabPanel>
