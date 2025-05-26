@@ -1,6 +1,7 @@
 const express = require('express');
 const PlaidService = require('../services/plaid');
 const SupabaseService = require('../services/supabase');
+const { randomUUID } = require('crypto');
 const router = express.Router();
 
 const plaid = new PlaidService();
@@ -99,7 +100,7 @@ router.post('/create_link_token', async (req, res) => {
   }
 });
 
-// Exchange public token for access token
+// Exchange public token for access token - FIXED UUID VERSION
 router.post('/exchange_public_token', async (req, res) => {
   try {
     const { public_token, user_id } = req.body;
@@ -111,8 +112,9 @@ router.post('/exchange_public_token', async (req, res) => {
       });
     }
 
-    const userId = user_id || `user_${Date.now()}`;
-    console.log('Exchanging token for user:', userId);
+    // Generate a proper UUID for the user
+    const userId = user_id || randomUUID();
+    console.log('Exchanging token for user UUID:', userId);
 
     const exchangeResponse = await plaid.exchangePublicToken(public_token);
     console.log('Token exchange successful');
@@ -149,8 +151,8 @@ router.post('/exchange_public_token', async (req, res) => {
         if (transactionData.transactions && transactionData.transactions.length > 0) {
           const savedAccount = savedAccounts.find(sa => sa.account_id === account.account_id);
           if (savedAccount) {
-            await supabaseService.saveTransactions(savedAccount.id, transactionData.transactions);
-            totalTransactions += transactionData.transactions.length;
+            const result = await supabaseService.saveTransactions(savedAccount.id, transactionData.transactions);
+            totalTransactions += result.saved || transactionData.transactions.length;
             console.log(`Imported ${transactionData.transactions.length} transactions for ${account.name}`);
           }
         }
@@ -186,11 +188,15 @@ router.get('/user/:userId/transactions', async (req, res) => {
     const { userId } = req.params;
     const { limit = 50, offset = 0 } = req.query;
     
+    console.log(`Getting transactions for user: ${userId}`);
+    
     const transactions = await supabaseService.getUserTransactions(
       userId, 
       parseInt(limit), 
       parseInt(offset)
     );
+    
+    console.log(`Returning ${transactions.length} transactions`);
     
     res.json({
       success: true,
@@ -198,6 +204,7 @@ router.get('/user/:userId/transactions', async (req, res) => {
       count: transactions.length
     });
   } catch (error) {
+    console.error('Get transactions error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch transactions',
