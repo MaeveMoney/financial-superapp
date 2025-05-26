@@ -174,5 +174,41 @@ router.post('/institution', async (req, res) => {
     });
   }
 });
+// Add this route for debugging
+router.get('/debug', async (req, res) => {
+  try {
+    // Check environment variables
+    const config = {
+      clientId: process.env.PLAID_CLIENT_ID ? 'Set' : 'MISSING',
+      secret: process.env.PLAID_SECRET ? 'Set' : 'MISSING',
+      env: process.env.PLAID_ENV,
+      products: process.env.PLAID_PRODUCTS,
+      countries: process.env.PLAID_COUNTRY_CODES
+    };
 
+    console.log('Plaid configuration:', config);
+
+    // Try to create a simple link token
+    const linkTokenResponse = await plaid.createLinkToken('debug_user_123');
+
+    res.json({
+      success: true,
+      message: 'Plaid credentials are working!',
+      config: config,
+      linkTokenCreated: !!linkTokenResponse.link_token
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Plaid debug failed',
+      config: {
+        clientId: process.env.PLAID_CLIENT_ID ? 'Set' : 'MISSING',
+        secret: process.env.PLAID_SECRET ? 'Set' : 'MISSING',
+        env: process.env.PLAID_ENV
+      },
+      details: error.response?.data || error.message
+    });
+  }
+});
 module.exports = router;
