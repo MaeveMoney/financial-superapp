@@ -15,7 +15,6 @@ import {
   Spinner,
   Alert,
   AlertIcon,
-  Divider,
   Flex,
   IconButton
 } from '@chakra-ui/react';
@@ -96,8 +95,8 @@ const TransactionList = ({ userId }) => {
   };
 
   const filteredTransactions = transactions.filter(txn => {
-    const matchesSearch = txn.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         txn.merchant_name?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = txn.description && txn.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         txn.merchant_name && txn.merchant_name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = categoryFilter === 'all' || txn.category === categoryFilter;
     return matchesSearch && matchesCategory;
   });
@@ -112,3 +111,140 @@ const TransactionList = ({ userId }) => {
   }
 
   if (error) {
+    return (
+      <Alert status="error">
+        <AlertIcon />
+        {error}
+      </Alert>
+    );
+  }
+
+  return (
+    <Box>
+      <VStack spacing={6} align="stretch">
+        <HStack spacing={4}>
+          <Text fontSize="xl" fontWeight="bold">
+            Your Transactions
+          </Text>
+          <Badge colorScheme="blue" px={2} py={1}>
+            {filteredTransactions.length} transactions
+          </Badge>
+        </HStack>
+
+        <HStack spacing={4}>
+          <InputGroup maxW="300px">
+            <InputLeftElement>
+              <SearchIcon color="gray.400" />
+            </InputLeftElement>
+            <Input
+              placeholder="Search transactions..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </InputGroup>
+          
+          <Select
+            maxW="200px"
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+          >
+            <option value="all">All Categories</option>
+            {categories.map(cat => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </Select>
+        </HStack>
+
+        <VStack spacing={3} align="stretch">
+          {filteredTransactions.map((transaction) => (
+            <Card key={transaction.id} size="sm">
+              <CardBody>
+                <Flex justify="space-between" align="center">
+                  <HStack spacing={3} flex={1}>
+                    <VStack align="start" spacing={1} flex={1}>
+                      <Text fontWeight="semibold" fontSize="sm">
+                        {transaction.description || 'Transaction'}
+                      </Text>
+                      {transaction.merchant_name && (
+                        <Text fontSize="xs" color="gray.500">
+                          {transaction.merchant_name}
+                        </Text>
+                      )}
+                      <HStack spacing={2}>
+                        {editingCategory === transaction.id ? (
+                          <Select
+                            size="xs"
+                            value={transaction.category || 'Other'}
+                            onChange={(e) => updateCategory(transaction.id, e.target.value)}
+                            onBlur={() => setEditingCategory(null)}
+                            autoFocus
+                          >
+                            {categories.map(cat => (
+                              <option key={cat} value={cat}>{cat}</option>
+                            ))}
+                          </Select>
+                        ) : (
+                          <Badge 
+                            size="sm" 
+                            colorScheme="blue"
+                            cursor="pointer"
+                            onClick={() => setEditingCategory(transaction.id)}
+                          >
+                            {transaction.category || 'Other'}
+                          </Badge>
+                        )}
+                        <IconButton
+                          size="xs"
+                          variant="ghost"
+                          icon={<EditIcon />}
+                          onClick={() => setEditingCategory(transaction.id)}
+                        />
+                      </HStack>
+                    </VStack>
+                    
+                    <VStack align="end" spacing={1}>
+                      <Text
+                        fontWeight="bold"
+                        color={getAmountColor(transaction.amount)}
+                        fontSize="sm"
+                      >
+                        {transaction.amount > 0 ? '+' : '-'}{formatAmount(transaction.amount)}
+                      </Text>
+                      <Text fontSize="xs" color="gray.500">
+                        {formatDate(transaction.date)}
+                      </Text>
+                      <Badge size="xs" variant="outline">
+                        {transaction.user_accounts?.account_name || 'Account'}
+                      </Badge>
+                    </VStack>
+                  </HStack>
+                </Flex>
+              </CardBody>
+            </Card>
+          ))}
+          
+          {filteredTransactions.length === 0 && (
+            <Card>
+              <CardBody>
+                <Text textAlign="center" color="gray.500" py={8}>
+                  {searchTerm || categoryFilter !== 'all' 
+                    ? 'No transactions match your filters'
+                    : 'No transactions found'
+                  }
+                </Text>
+              </CardBody>
+            </Card>
+          )}
+        </VStack>
+
+        {filteredTransactions.length > 0 && (
+          <Button variant="outline" onClick={fetchTransactions}>
+            Load More Transactions
+          </Button>
+        )}
+      </VStack>
+    </Box>
+  );
+};
+
+export default TransactionList;
