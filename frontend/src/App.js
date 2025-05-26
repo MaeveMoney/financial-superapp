@@ -6,6 +6,9 @@ import TransactionList from './components/TransactionList';
 function App() {
   const [connectedData, setConnectedData] = useState(null);
   const [userId, setUserId] = useState(null);
+  
+  // Force deployment - remove this line later
+  console.log('App.js deployed at:', new Date().toISOString());
 
   const handlePlaidSuccess = (data) => {
     console.log('=== APP.JS RECEIVED DATA ===');
