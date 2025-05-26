@@ -47,20 +47,21 @@ async createLinkToken(userId) {
   }
 }
 
-  // Exchange public token for access token
-  async exchangePublicToken(publicToken) {
-    try {
-      const request = {
-        public_token: publicToken,
-      };
+ // Exchange public token for access token
+async exchangePublicToken(publicToken) {
+  try {
+    const request = {
+      public_token: publicToken,
+    };
 
-      const response = await this.client.linkTokenExchange(request);
-      return response.data;
-    } catch (error) {
-      console.error('Plaid exchangePublicToken error:', error.response?.data || error.message);
-      throw error;
-    }
+    // CORRECT method name
+    const response = await this.client.itemPublicTokenExchange(request);
+    return response.data;
+  } catch (error) {
+    console.error('Plaid exchangePublicToken error:', error.response?.data || error.message);
+    throw error;
   }
+}
 
   // Get user accounts
   async getAccounts(accessToken) {
