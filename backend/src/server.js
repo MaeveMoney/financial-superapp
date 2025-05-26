@@ -40,34 +40,19 @@ app.get('/api/test', (req, res) => {
     environment: process.env.NODE_ENV || 'development'
   });
 });
-// Add this after the existing routes, before app.listen()
 
-// Plaid API routes
+// Test route added directly to server.js
+app.get('/api/test-direct', async (req, res) => {
+  res.json({
+    success: true,
+    message: 'Direct route working!',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Load Plaid API routes
 const plaidRoutes = require('./routes/plaid');
 app.use('/api/plaid', plaidRoutes);
-
-// Test route to verify Plaid connection
-app.get('/api/plaid/test', async (req, res) => {
-  try {
-    const PlaidService = require('./services/plaid');
-    const plaid = new PlaidService();
-    
-    // Test by creating a link token
-    const linkToken = await plaid.createLinkToken('test_user');
-    
-    res.json({
-      success: true,
-      message: 'Plaid connection working!',
-      link_token_created: !!linkToken.link_token
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: 'Plaid connection failed',
-      details: error.message
-    });
-  }
-});
 
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
