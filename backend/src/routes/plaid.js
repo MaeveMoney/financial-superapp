@@ -376,4 +376,46 @@ router.get('/debug', async (req, res) => {
   }
 });
 
+// Test database permissions
+router.get('/test-db-permissions', async (req, res) => {
+  try {
+    // Test if we can insert a simple record
+    const testRecord = {
+      user_id: 'test_user_123',
+      account_id: 'test_account_123',
+      account_type: 'checking',
+      account_name: 'Test Account',
+      balance: 100.00,
+      currency: 'CAD',
+      is_active: true
+    };
+
+    const { data, error } = await supabaseService.supabase
+      .from('user_accounts')
+      .insert(testRecord)
+      .select();
+
+    if (error) throw error;
+
+    // Clean up test record
+    await supabaseService.supabase
+      .from('user_accounts')
+      .delete()
+      .eq('user_id', 'test_user_123');
+
+    res.json({
+      success: true,
+      message: 'Database permissions working!',
+      test_record_created: !!data[0]
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Database permission test failed',
+      details: error.message,
+      code: error.code
+    });
+  }
+});
+
 module.exports = router;
