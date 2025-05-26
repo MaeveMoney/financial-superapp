@@ -24,10 +24,12 @@ class SupabaseService {
         balance: accountData.balances.current || accountData.balances.available || 0,
         available_balance: accountData.balances.available || 0,
         currency: accountData.balances.iso_currency_code || 'CAD',
-        access_token: accessToken, // We'll encrypt this in production
+        access_token: accessToken,
         last_synced_at: new Date().toISOString(),
         is_active: true
       };
+
+      console.log('Saving account record:', accountRecord.account_name);
 
       const { data, error } = await this.supabase
         .from('user_accounts')
@@ -37,7 +39,12 @@ class SupabaseService {
         })
         .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
+      
+      console.log('Account saved successfully:', data[0]?.account_name);
       return data[0];
     } catch (error) {
       console.error('Error saving user account:', error);
@@ -46,18 +53,20 @@ class SupabaseService {
   }
 
   // Save transactions for an account
-  async saveTransactions(accountId, transactions) {
+  async saveTransactions(accountDbId, transactions) {
     try {
+      console.log(`Saving ${transactions.length} transactions for account ${accountDbId}`);
+      
       const transactionRecords = transactions.map(txn => ({
-        account_id: accountId,
+        account_id: accountDbId,
         transaction_id: txn.transaction_id,
         amount: txn.amount,
         description: txn.name,
-        merchant_name: txn.merchant_name,
+        merchant_name: txn.merchant_name || null,
         date: txn.date,
         posted_date: txn.date,
         category: this.mapPlaidCategory(txn.category),
-        subcategory: txn.category ? txn.category[0] : null,
+        subcategory: txn.category && txn.category[0] ? txn.category[0] : null,
         is_recurring: false,
         is_manual: false
       }));
@@ -70,7 +79,12 @@ class SupabaseService {
         })
         .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase transactions error:', error);
+        throw error;
+      }
+      
+      console.log(`Successfully saved ${data.length} transactions`);
       return data;
     } catch (error) {
       console.error('Error saving transactions:', error);
@@ -99,6 +113,8 @@ class SupabaseService {
   // Get transactions for user accounts
   async getUserTransactions(userId, limit = 100, offset = 0) {
     try {
+      console.log(`Getting transactions for user ${userId}`);
+      
       const { data, error } = await this.supabase
         .from('transactions')
         .select(`
@@ -108,9 +124,14 @@ class SupabaseService {
         .eq('user_accounts.user_id', userId)
         .order('date', { ascending: false })
         .limit(limit)
-        .offset(offset);
+        .range(offset, offset + limit - 1);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase getUserTransactions error:', error);
+        throw error;
+      }
+      
+      console.log(`Found ${data.length} transactions for user`);
       return data;
     } catch (error) {
       console.error('Error getting user transactions:', error);
@@ -145,7 +166,6 @@ class SupabaseService {
     }
 
     const primary = plaidCategories[0];
-    const secondary = plaidCategories[1];
 
     // Map to simplified categories
     const categoryMap = {
