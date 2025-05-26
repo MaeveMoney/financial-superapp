@@ -43,16 +43,32 @@ const PlaidLinkComponent = ({ onSuccess }) => {
   };
 
   const onPlaidSuccess = useCallback(async (publicToken, metadata) => {
+    console.log('=== Plaid Success Callback ===');
+    console.log('Public Token:', publicToken);
+    console.log('Metadata:', metadata);
+    
     setLoading(true);
     setError('');
 
     try {
+      console.log('Attempting token exchange...');
+      
       // Exchange public token for access token
       const response = await axios.post(`${API_BASE}/plaid/exchange_public_token`, {
         public_token: publicToken
       });
 
-      const { access_token, accounts: userAccounts } = response.data;
+      console.log('Full backend response:', response.data);
+
+      const { access_token, accounts: userAccounts, user_id, transactions_imported } = response.data;
+
+      // Make sure we have a user_id
+      if (!user_id) {
+        throw new Error('No user_id received from backend');
+      }
+
+      console.log('User ID received:', user_id);
+      console.log('Transactions imported:', transactions_imported);
 
       setAccounts(userAccounts);
       
@@ -60,13 +76,18 @@ const PlaidLinkComponent = ({ onSuccess }) => {
         onSuccess({
           access_token,
           accounts: userAccounts,
-          institution: metadata.institution
+          user_id: user_id, // Make sure this gets passed
+          institution: metadata.institution,
+          transactions_imported: transactions_imported
         });
       }
 
     } catch (error) {
-      setError('Failed to connect bank account');
-      console.error('Token exchange error:', error);
+      console.error('=== Token Exchange Error ===');
+      console.error('Error object:', error);
+      console.error('Response data:', error.response?.data);
+      
+      setError(`Failed to connect bank account: ${error.response?.data?.details || error.message}`);
     } finally {
       setLoading(false);
     }
@@ -137,7 +158,7 @@ const PlaidLinkComponent = ({ onSuccess }) => {
         {loading && (
           <VStack spacing={3}>
             <Spinner size="lg" color="brand.500" />
-            <Text>Setting up your accounts...</Text>
+            <Text>Setting up your accounts and importing transactions...</Text>
           </VStack>
         )}
 
