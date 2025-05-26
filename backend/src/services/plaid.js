@@ -28,8 +28,8 @@ async createLinkToken(userId) {
         client_user_id: userId,
       },
       client_name: 'Financial SuperApp',
-      products: (process.env.PLAID_PRODUCTS || 'transactions,accounts').split(','),
-      country_codes: (process.env.PLAID_COUNTRY_CODES || 'US,CA').split(','),
+      products: ['transactions', 'auth'], // Fixed product names
+      country_codes: ['US', 'CA'],
       language: 'en',
     };
 
