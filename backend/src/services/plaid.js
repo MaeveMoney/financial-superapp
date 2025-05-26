@@ -15,26 +15,37 @@ class PlaidService {
     this.client = new PlaidApi(configuration);
   }
 
-  // Create a link token for Plaid Link
-  async createLinkToken(userId) {
-    try {
-      const request = {
-        user: {
-          client_user_id: userId,
-        },
-        client_name: 'Financial SuperApp',
-        products: (process.env.PLAID_PRODUCTS || 'transactions,accounts').split(','),
-        country_codes: (process.env.PLAID_COUNTRY_CODES || 'US,CA').split(','),
-        language: 'en',
-      };
+ // Create a link token for Plaid Link
+async createLinkToken(userId) {
+  try {
+    console.log('Creating link token with config:');
+    console.log('- Client ID:', process.env.PLAID_CLIENT_ID ? 'Set' : 'MISSING');
+    console.log('- Secret:', process.env.PLAID_SECRET ? 'Set' : 'MISSING');
+    console.log('- Environment:', process.env.PLAID_ENV);
+    
+    const request = {
+      user: {
+        client_user_id: userId,
+      },
+      client_name: 'Financial SuperApp',
+      products: (process.env.PLAID_PRODUCTS || 'transactions,accounts').split(','),
+      country_codes: (process.env.PLAID_COUNTRY_CODES || 'US,CA').split(','),
+      language: 'en',
+    };
 
-      const response = await this.client.linkTokenCreate(request);
-      return response.data;
-    } catch (error) {
-      console.error('Plaid createLinkToken error:', error.response?.data || error.message);
-      throw error;
-    }
+    console.log('Link token request:', JSON.stringify(request, null, 2));
+
+    const response = await this.client.linkTokenCreate(request);
+    console.log('Link token created successfully');
+    return response.data;
+  } catch (error) {
+    console.error('Detailed Plaid error:');
+    console.error('- Status:', error.response?.status);
+    console.error('- Data:', JSON.stringify(error.response?.data, null, 2));
+    console.error('- Message:', error.message);
+    throw error;
   }
+}
 
   // Exchange public token for access token
   async exchangePublicToken(publicToken) {
