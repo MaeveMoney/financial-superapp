@@ -22,10 +22,8 @@ const PlaidLinkComponent = ({ onSuccess }) => {
   const [error, setError] = useState('');
   const [accounts, setAccounts] = useState([]);
 
-  // Your Railway backend URL
   const API_BASE = 'https://financial-superapp-production.up.railway.app/api';
 
-  // Initialize Plaid Link
   useEffect(() => {
     createLinkToken();
   }, []);
@@ -51,41 +49,51 @@ const PlaidLinkComponent = ({ onSuccess }) => {
     setError('');
 
     try {
-      console.log('Attempting token exchange...');
+      console.log('Sending request to:', `${API_BASE}/plaid/exchange_public_token`);
       
-      // Exchange public token for access token
       const response = await axios.post(`${API_BASE}/plaid/exchange_public_token`, {
         public_token: publicToken
       });
 
-      console.log('Full backend response:', response.data);
+      console.log('=== FULL BACKEND RESPONSE ===');
+      console.log('Response status:', response.status);
+      console.log('Response data:', JSON.stringify(response.data, null, 2));
+      
+      // Check if we have the expected fields
+      const backendData = response.data;
+      console.log('Backend user_id:', backendData.user_id);
+      console.log('Backend transactions_imported:', backendData.transactions_imported);
+      console.log('Backend accounts count:', backendData.accounts?.length);
 
-      const { access_token, accounts: userAccounts, user_id, transactions_imported } = response.data;
-
-      // Make sure we have a user_id
-      if (!user_id) {
-        throw new Error('No user_id received from backend');
+      if (!backendData.user_id) {
+        console.error('❌ ERROR: No user_id in backend response!');
+        console.error('Available fields:', Object.keys(backendData));
       }
 
-      console.log('User ID received:', user_id);
-      console.log('Transactions imported:', transactions_imported);
+      const finalData = {
+        access_token: backendData.access_token,
+        accounts: backendData.accounts,
+        user_id: backendData.user_id,
+        transactions_imported: backendData.transactions_imported,
+        institution: metadata.institution
+      };
 
-      setAccounts(userAccounts);
+      console.log('=== FINAL DATA BEING SENT TO APP ===');
+      console.log('Final data:', JSON.stringify(finalData, null, 2));
+
+      setAccounts(backendData.accounts);
       
       if (onSuccess) {
-        onSuccess({
-          access_token,
-          accounts: userAccounts,
-          user_id: user_id, // Make sure this gets passed
-          institution: metadata.institution,
-          transactions_imported: transactions_imported
-        });
+        onSuccess(finalData);
+      } else {
+        console.error('❌ No onSuccess callback provided!');
       }
 
     } catch (error) {
       console.error('=== Token Exchange Error ===');
-      console.error('Error object:', error);
-      console.error('Response data:', error.response?.data);
+      console.error('Error:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
       
       setError(`Failed to connect bank account: ${error.response?.data?.details || error.message}`);
     } finally {
