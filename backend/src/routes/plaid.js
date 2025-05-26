@@ -4,6 +4,48 @@ const router = express.Router();
 
 const plaid = new PlaidService();
 
+// GET routes for browser testing
+router.get('/test-connection', async (req, res) => {
+  try {
+    const linkToken = await plaid.createLinkToken('test_user_browser');
+    
+    res.json({
+      success: true,
+      message: 'Plaid connection working via GET request!',
+      link_token_created: !!linkToken.link_token,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Plaid connection failed',
+      details: error.response?.data || error.message
+    });
+  }
+});
+
+// Browser-accessible version of create_link_token
+router.get('/create_link_token_test', async (req, res) => {
+  try {
+    const linkToken = await plaid.createLinkToken(`browser_user_${Date.now()}`);
+    
+    res.json({
+      success: true,
+      link_token: linkToken.link_token,
+      expiration: linkToken.expiration,
+      message: 'Link token created successfully via GET'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create link token',
+      details: error.response?.data || error.message
+    });
+  }
+});
+
+// POST routes for actual application use
+
 // Create link token for Plaid Link
 router.post('/create_link_token', async (req, res) => {
   try {
@@ -174,7 +216,8 @@ router.post('/institution', async (req, res) => {
     });
   }
 });
-// Add this route for debugging
+
+// Debug route (same as before)
 router.get('/debug', async (req, res) => {
   try {
     // Check environment variables
@@ -211,4 +254,5 @@ router.get('/debug', async (req, res) => {
     });
   }
 });
+
 module.exports = router;
