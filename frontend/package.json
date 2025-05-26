@@ -14,7 +14,8 @@
     "@chakra-ui/icons": "^2.1.1",
     "recharts": "^2.8.0",
     "axios": "^1.6.0",
-    "@supabase/supabase-js": "^2.38.0"
+    "@supabase/supabase-js": "^2.38.0",
+    "react-plaid-link": "^3.3.2"
   },
   "scripts": {
     "start": "react-scripts start",
