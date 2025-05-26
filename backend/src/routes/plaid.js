@@ -4,6 +4,10 @@ const router = express.Router();
 
 const plaid = new PlaidService();
 
+// Add these two lines after: const plaid = new PlaidService();
+const SupabaseService = require('../services/supabase');
+const supabaseService = new SupabaseService();
+
 // GET routes for browser testing
 router.get('/test-connection', async (req, res) => {
   try {
