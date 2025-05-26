@@ -11,8 +11,9 @@ router.get('/test-db-permissions', async (req, res) => {
   try {
     console.log('Testing database permissions...');
     
+    // Use a proper UUID format for the test
     const testRecord = {
-      user_id: 'test_user_123',
+      user_id: '123e4567-e89b-12d3-a456-426614174000', // Valid UUID format
       account_id: 'test_account_123',
       account_type: 'checking',
       account_name: 'Test Account',
@@ -37,7 +38,7 @@ router.get('/test-db-permissions', async (req, res) => {
     await supabaseService.supabase
       .from('user_accounts')
       .delete()
-      .eq('user_id', 'test_user_123');
+      .eq('user_id', '123e4567-e89b-12d3-a456-426614174000');
 
     console.log('Test record cleaned up');
 
