@@ -46,8 +46,6 @@ router.get('/create_link_token_test', async (req, res) => {
   }
 });
 
-// POST routes for actual application use
-
 // Create link token for Plaid Link
 router.post('/create_link_token', async (req, res) => {
   try {
@@ -318,4 +316,64 @@ router.get('/user/:userId/transactions', async (req, res) => {
 });
 
 // Update transaction category
-router.put('/transaction/:transactionId/category
+router.put('/transaction/:transactionId/category', async (req, res) => {
+  try {
+    const { transactionId } = req.params;
+    const { category, subcategory } = req.body;
+    
+    const updatedTransaction = await supabaseService.updateTransactionCategory(
+      transactionId, 
+      category, 
+      subcategory
+    );
+    
+    res.json({
+      success: true,
+      transaction: updatedTransaction
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update transaction category',
+      details: error.message
+    });
+  }
+});
+
+// Debug route
+router.get('/debug', async (req, res) => {
+  try {
+    const config = {
+      clientId: process.env.PLAID_CLIENT_ID ? 'Set' : 'MISSING',
+      secret: process.env.PLAID_SECRET ? 'Set' : 'MISSING',
+      env: process.env.PLAID_ENV,
+      products: process.env.PLAID_PRODUCTS,
+      countries: process.env.PLAID_COUNTRY_CODES
+    };
+
+    console.log('Plaid configuration:', config);
+
+    const linkTokenResponse = await plaid.createLinkToken('debug_user_123');
+
+    res.json({
+      success: true,
+      message: 'Plaid credentials are working!',
+      config: config,
+      linkTokenCreated: !!linkTokenResponse.link_token
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Plaid debug failed',
+      config: {
+        clientId: process.env.PLAID_CLIENT_ID ? 'Set' : 'MISSING',
+        secret: process.env.PLAID_SECRET ? 'Set' : 'MISSING',
+        env: process.env.PLAID_ENV
+      },
+      details: error.response?.data || error.message
+    });
+  }
+});
+
+module.exports = router;
