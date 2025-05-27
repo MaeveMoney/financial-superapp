@@ -32,7 +32,7 @@ import {
   NumberInput,
   NumberInputField
 } from '@chakra-ui/react';
-import { AddIcon, EditIcon, DeleteIcon, MoreVerticalIcon } from '@chakra-ui/icons';
+import { AddIcon, EditIcon, DeleteIcon, HamburgerIcon } from '@chakra-ui/icons';
 import axios from 'axios';
 import BudgetCreation from './BudgetCreation';
 
@@ -42,17 +42,17 @@ const BudgetDashboard = ({ userId }) => {
   const [error, setError] = useState('');
   const [editingBudget, setEditingBudget] = useState(null);
   const [showCreateBudget, setShowCreateBudget] = useState(false);
-
+  
   const { isOpen: isEditModalOpen, onOpen: onEditModalOpen, onClose: onEditModalClose } = useDisclosure();
-
+  
   const API_BASE = 'https://financial-superapp-production.up.railway.app/api';
-
+  
   useEffect(() => {
     if (userId) {
       fetchBudgets();
     }
   }, [userId]);
-
+  
   const fetchBudgets = async () => {
     try {
       setLoading(true);
@@ -65,7 +65,7 @@ const BudgetDashboard = ({ userId }) => {
       setLoading(false);
     }
   };
-
+  
   const handleEditBudget = (budget) => {
     setEditingBudget({
       ...budget,
@@ -74,7 +74,7 @@ const BudgetDashboard = ({ userId }) => {
     });
     onEditModalOpen();
   };
-
+  
   const handleUpdateBudget = async () => {
     try {
       await axios.put(`${API_BASE}/budget/budget/${editingBudget.id}`, {
@@ -83,7 +83,7 @@ const BudgetDashboard = ({ userId }) => {
         amount: parseFloat(editingBudget.amount),
         alert_threshold: parseFloat(editingBudget.alert_threshold)
       });
-
+      
       await fetchBudgets();
       onEditModalClose();
       setEditingBudget(null);
@@ -92,12 +92,12 @@ const BudgetDashboard = ({ userId }) => {
       console.error('Error updating budget:', error);
     }
   };
-
+  
   const handleDeleteBudget = async (budgetId) => {
     if (!window.confirm('Are you sure you want to delete this budget?')) {
       return;
     }
-
+    
     try {
       await axios.delete(`${API_BASE}/budget/budget/${budgetId}`, {
         data: { userId }
@@ -108,13 +108,13 @@ const BudgetDashboard = ({ userId }) => {
       console.error('Error deleting budget:', error);
     }
   };
-
+  
   const getProgressColor = (percentage) => {
     if (percentage >= 100) return 'red';
     if (percentage >= 80) return 'yellow';
     return 'green';
   };
-
+  
   const getStatusBadge = (budget) => {
     if (budget.is_over_budget) {
       return <Badge colorScheme="red">Over Budget</Badge>;
@@ -124,20 +124,20 @@ const BudgetDashboard = ({ userId }) => {
     }
     return <Badge colorScheme="green">On Track</Badge>;
   };
-
+  
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-CA', {
       style: 'currency',
       currency: 'CAD'
     }).format(amount);
   };
-
+  
   const formatDateRange = (start, end) => {
     const startDate = new Date(start);
     const endDate = new Date(end);
     return `${startDate.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}`;
   };
-
+  
   if (loading) {
     return (
       <VStack spacing={4} py={8}>
@@ -146,7 +146,7 @@ const BudgetDashboard = ({ userId }) => {
       </VStack>
     );
   }
-
+  
   if (showCreateBudget) {
     return (
       <VStack spacing={6}>
@@ -157,7 +157,7 @@ const BudgetDashboard = ({ userId }) => {
           </Button>
         </HStack>
         <BudgetCreation 
-          userId={userId} 
+          userId={userId}
           onBudgetCreated={() => {
             setShowCreateBudget(false);
             fetchBudgets();
@@ -166,7 +166,7 @@ const BudgetDashboard = ({ userId }) => {
       </VStack>
     );
   }
-
+  
   return (
     <Box maxW="6xl" mx="auto">
       <VStack spacing={8} align="stretch">
@@ -183,14 +183,14 @@ const BudgetDashboard = ({ userId }) => {
             Create Budget
           </Button>
         </HStack>
-
+        
         {error && (
           <Alert status="error">
             <AlertIcon />
             {error}
           </Alert>
         )}
-
+        
         {budgets.length === 0 ? (
           <Card>
             <CardBody>
@@ -223,7 +223,7 @@ const BudgetDashboard = ({ userId }) => {
                       <Menu>
                         <MenuButton
                           as={IconButton}
-                          icon={<MoreVerticalIcon />}
+                          icon={<HamburgerIcon />}
                           variant="ghost"
                           size="sm"
                         />
@@ -241,7 +241,7 @@ const BudgetDashboard = ({ userId }) => {
                         </MenuList>
                       </Menu>
                     </HStack>
-
+                    
                     <VStack spacing={2} align="stretch">
                       <HStack justify="space-between">
                         <Text fontSize="sm" color="gray.600">Spent</Text>
@@ -249,14 +249,12 @@ const BudgetDashboard = ({ userId }) => {
                           {formatCurrency(budget.spent_amount)} of {formatCurrency(budget.amount)}
                         </Text>
                       </HStack>
-                      
                       <Progress
                         value={budget.percentage_used}
                         colorScheme={getProgressColor(budget.percentage_used)}
                         size="md"
                         borderRadius="md"
                       />
-                      
                       <HStack justify="space-between">
                         <Text fontSize="xs" color="gray.500">
                           {budget.percentage_used.toFixed(1)}% used
@@ -266,14 +264,14 @@ const BudgetDashboard = ({ userId }) => {
                         </Text>
                       </HStack>
                     </VStack>
-
+                    
                     <HStack justify="space-between" align="center">
                       {getStatusBadge(budget)}
                       <Badge variant="outline" colorScheme="blue">
                         {budget.budget_type}
                       </Badge>
                     </HStack>
-
+                    
                     <VStack spacing={1} align="start">
                       <Text fontSize="xs" color="gray.500">
                         Period: {formatDateRange(budget.period_start, budget.period_end)}
@@ -282,7 +280,7 @@ const BudgetDashboard = ({ userId }) => {
                         <Text fontSize="xs" color="green.500">Auto-renewing</Text>
                       )}
                     </VStack>
-
+                    
                     {budget.notes && (
                       <Text fontSize="sm" color="gray.600" fontStyle="italic">
                         "{budget.notes}"
@@ -294,7 +292,7 @@ const BudgetDashboard = ({ userId }) => {
             ))}
           </SimpleGrid>
         )}
-
+        
         {/* Edit Budget Modal */}
         <Modal isOpen={isEditModalOpen} onClose={onEditModalClose} size="lg">
           <ModalOverlay />
@@ -311,7 +309,7 @@ const BudgetDashboard = ({ userId }) => {
                       onChange={(e) => setEditingBudget(prev => ({ ...prev, name: e.target.value }))}
                     />
                   </FormControl>
-
+                  
                   <FormControl>
                     <FormLabel>Budget Amount (CAD)</FormLabel>
                     <NumberInput>
@@ -321,7 +319,7 @@ const BudgetDashboard = ({ userId }) => {
                       />
                     </NumberInput>
                   </FormControl>
-
+                  
                   <FormControl>
                     <FormLabel>Alert Threshold (%)</FormLabel>
                     <NumberInput min={50} max={100}>
@@ -331,7 +329,7 @@ const BudgetDashboard = ({ userId }) => {
                       />
                     </NumberInput>
                   </FormControl>
-
+                  
                   <HStack w="full" justify="end" spacing={3}>
                     <Button variant="ghost" onClick={onEditModalClose}>
                       Cancel
