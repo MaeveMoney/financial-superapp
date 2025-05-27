@@ -1,93 +1,80 @@
-import React, { useState } from 'react';
-import { Box, Container, Heading, Text, VStack, Tabs, TabList, TabPanels, Tab, TabPanel } from '@chakra-ui/react';
-import PlaidLinkComponent from './components/PlaidLinkComponent';
-import TransactionList from './components/TransactionList';
-import BudgetDashboard from './components/BudgetDashboard';
+import React, { useEffect, useState } from 'react';
+import {
+  Box,
+  Button,
+  Container,
+  Heading,
+  VStack,
+  Text,
+  Spinner,
+} from '@chakra-ui/react';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.REACT_APP_SUPABASE_URL,
+  process.env.REACT_APP_SUPABASE_ANON_KEY
+);
 
 function App() {
-  const [connectedData, setConnectedData] = useState(null);
-  const [userId, setUserId] = useState(null);
-  
-  // Force deployment - remove this line later
-  console.log('App.js deployed at:', new Date().toISOString());
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const handlePlaidSuccess = (data) => {
-    console.log('=== APP.JS RECEIVED DATA ===');
-    console.log('Full data received:', JSON.stringify(data, null, 2));
-    console.log('User ID from data:', data.user_id);
-    console.log('Transactions imported:', data.transactions_imported);
-    
-    setConnectedData(data);
-    setUserId(data.user_id);
-    
-    if (!data.user_id) {
-      console.error('❌ APP.JS ERROR: No user_id received!');
-      console.error('Available fields:', Object.keys(data));
-    }
+  useEffect(() => {
+    const session = supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) setUser(session.user);
+      setLoading(false);
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user ?? null);
+      }
+    );
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  const signInWithGoogle = async () => {
+    await supabase.auth.signInWithOAuth({ provider: 'google' });
   };
 
-  return (
-    <Container maxW="6xl" py={20}>
-      <VStack spacing={8}>
-        <Heading size="2xl" color="brand.600" textAlign="center">
-          Financial SuperApp
-        </Heading>
-        <Text fontSize="xl" color="gray.600" textAlign="center">
-          Your complete Canadian financial management platform
-        </Text>
-        
-        {!connectedData ? (
-          <PlaidLinkComponent onSuccess={handlePlaidSuccess} />
-        ) : (
-          <Box w="full">
-            <Tabs variant="enclosed" colorScheme="brand">
-              <TabList>
-                <Tab>Accounts</Tab>
-                <Tab>Transactions</Tab>
-                <Tab>Budget</Tab>
-                <Tab>Reports</Tab>
-              </TabList>
+  const signOut = async () => {
+    await supabase.auth.signOut();
+  };
 
-              <TabPanels>
-                <TabPanel>
-                  <VStack spacing={4}>
-                    <Text color="green.700" fontWeight="semibold">
-                      🎉 Successfully connected {connectedData.accounts?.length} accounts!
-                    </Text>
-                    <Text fontSize="sm" color="green.600">
-                      Institution: {connectedData.institution?.name}
-                    </Text>
-                    <Text fontSize="sm" color="blue.600">
-                      Imported {connectedData.transactions_imported} transactions
-                    </Text>
-                    <Text fontSize="sm" color="purple.600">
-                      User ID: {userId || 'MISSING!'}
-                    </Text>
-                  </VStack>
-                </TabPanel>
-                
-                <TabPanel>
-                  {userId ? (
-                    <TransactionList userId={userId} />
-                  ) : (
-                    <Text color="red.500">Error: No user ID available to load transactions</Text>
-                  )}
-                </TabPanel>
-                
-                <TabPanel>
-                  {userId ? (
-                    <BudgetDashboard userId={userId} />
-                  ) : (
-                    <Text color="red.500">Error: No user ID available to load budgets</Text>
-                  )}
-                </TabPanel>
-                
-                <TabPanel>
-                  <Text>Financial reports coming soon...</Text>
-                </TabPanel>
-              </TabPanels>
-            </Tabs>
-          </Box>
+  if (loading) {
+    return (
+      <Container centerContent py={20}>
+        <Spinner size="xl" />
+      </Container>
+    );
+  }
+
+  return (
+    <Container maxW="4xl" py={20}>
+      <VStack spacing={8} textAlign="center">
+        {!user ? (
+          <>
+            <Heading size="2xl" color="brand.600">
+              Financial SuperApp
+            </Heading>
+            <Text fontSize="lg" color="gray.600">
+              Sign in with Google to begin managing your finances
+            </Text>
+            <Button colorScheme="blue" size="lg" onClick={signInWithGoogle}>
+              Sign in with Google
+            </Button>
+          </>
+        ) : (
+          <>
+            <Heading size="xl">Welcome, {user.email}</Heading>
+            <Text>Your dashboard is coming soon!</Text>
+            <Button colorScheme="red" onClick={signOut}>
+              Sign Out
+            </Button>
+          </>
         )}
       </VStack>
     </Container>
