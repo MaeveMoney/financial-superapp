@@ -1,4 +1,3 @@
-// Import required packages
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -8,56 +7,72 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Security middleware
+// Set up CORS to allow requests from Vercel frontend
+const allowedOrigins = [
+  'https://financial-superapp.vercel.app', // your actual frontend domain
+  'http://localhost:3000',                 // allow local dev in case you run it locally later
+];
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // Allow requests with no origin (e.g., mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      } else {
+        return callback(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true,
+  })
+);
+
 app.use(helmet());
-app.use(cors());
 app.use(express.json());
 
-// Basic route to test if server is working
+// Basic health & test routes
 app.get('/', (req, res) => {
-  res.json({ 
+  res.json({
     message: 'Financial Super-App API is running!',
     timestamp: new Date().toISOString(),
     version: '1.0.0',
-    status: 'healthy'
+    status: 'healthy',
   });
 });
 
-// Health check route (Railway uses this to know if your app is working)
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'healthy', 
+  res.json({
+    status: 'healthy',
     uptime: process.uptime(),
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 });
 
-// Test database connection route
 app.get('/api/test', (req, res) => {
-  res.json({ 
+  res.json({
     message: 'API endpoint working!',
     database: 'Connected to Supabase',
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
   });
 });
 
-// Test route added directly to server.js
 app.get('/api/test-direct', async (req, res) => {
   res.json({
     success: true,
     message: 'Direct route working!',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 });
 
-// Load API routes
+// Import and use routes
 const plaidRoutes = require('./routes/plaid');
 const budgetRoutes = require('./routes/budget');
-const userRoutes = require('./routes/user'); // NEW user routes
+const userRoutes = require('./routes/user');
 
 app.use('/api/plaid', plaidRoutes);
 app.use('/api/budget', budgetRoutes);
-app.use('/api/user', userRoutes); // Mount user routes
+app.use('/api/user', userRoutes);
 
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
