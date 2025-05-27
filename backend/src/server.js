@@ -50,9 +50,12 @@ app.get('/api/test-direct', async (req, res) => {
   });
 });
 
-// Load Plaid API routes
+// Load API routes
 const plaidRoutes = require('./routes/plaid');
+const budgetRoutes = require('./routes/budget');
+
 app.use('/api/plaid', plaidRoutes);
+app.use('/api/budget', budgetRoutes);
 
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
