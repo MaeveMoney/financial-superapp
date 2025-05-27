@@ -9,6 +9,7 @@ import {
   Spinner,
 } from '@chakra-ui/react';
 import { createClient } from '@supabase/supabase-js';
+import axios from 'axios';
 
 const supabase = createClient(
   process.env.REACT_APP_SUPABASE_URL,
@@ -20,19 +21,46 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const session = supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) setUser(session.user);
-      setLoading(false);
-    });
+    const loadSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      if (session?.user) {
+        setUser(session.user);
+
+        // Save user to backend
+        const token = session.access_token;
+
+        try {
+          await axios.post(
+            `${process.env.REACT_APP_BACKEND_URL}/api/user/save`,
+            {},
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+          console.log('✅ User saved to backend');
+        } catch (err) {
+          console.error('❌ Failed to save user', err);
+        }
+      }
+
+      setLoading(false);
+    };
+
+    loadSession();
+
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
         setUser(session?.user ?? null);
       }
     );
 
     return () => {
-      authListener.subscription.unsubscribe();
+      listener.subscription.unsubscribe();
     };
   }, []);
 
@@ -57,9 +85,7 @@ function App() {
       <VStack spacing={8} textAlign="center">
         {!user ? (
           <>
-            <Heading size="2xl" color="brand.600">
-              Financial SuperApp
-            </Heading>
+            <Heading size="2xl">Financial SuperApp</Heading>
             <Text fontSize="lg" color="gray.600">
               Sign in with Google to begin managing your finances
             </Text>
