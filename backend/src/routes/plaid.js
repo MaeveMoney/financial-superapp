@@ -10,51 +10,39 @@ const supabaseService = new SupabaseService();
 // Test database permissions
 router.get('/test-db-permissions', async (req, res) => {
   try {
-    console.log('Testing database permissions...');
-    
-    // Use a proper UUID format for the test
     const testRecord = {
-      user_id: '123e4567-e89b-12d3-a456-426614174000', // Valid UUID format
+      user_id: '123e4567-e89b-12d3-a456-426614174000',
       account_id: 'test_account_123',
       account_type: 'checking',
       account_name: 'Test Account',
-      balance: 100.00,
+      balance: 100.0,
       currency: 'CAD',
-      is_active: true
+      is_active: true,
     };
 
-    console.log('Attempting to insert test record...');
     const { data, error } = await supabaseService.supabase
       .from('user_accounts')
       .insert(testRecord)
       .select();
 
-    if (error) {
-      console.error('Insert error:', error);
-      throw error;
-    }
-
-    console.log('Test record inserted successfully');
+    if (error) throw error;
 
     await supabaseService.supabase
       .from('user_accounts')
       .delete()
       .eq('user_id', '123e4567-e89b-12d3-a456-426614174000');
 
-    console.log('Test record cleaned up');
-
     res.json({
       success: true,
       message: 'Database permissions working!',
-      test_record_created: true
+      test_record_created: true,
     });
   } catch (error) {
-    console.error('Permission test failed:', error);
     res.status(500).json({
       success: false,
       error: 'Database permission test failed',
       details: error.message,
-      code: error.code
+      code: error.code,
     });
   }
 });
@@ -63,18 +51,17 @@ router.get('/test-db-permissions', async (req, res) => {
 router.get('/test-connection', async (req, res) => {
   try {
     const linkToken = await plaid.createLinkToken('test_user_browser');
-    
     res.json({
       success: true,
       message: 'Plaid connection working via GET request!',
       link_token_created: !!linkToken.link_token,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
     res.status(500).json({
       success: false,
       error: 'Plaid connection failed',
-      details: error.response?.data || error.message
+      details: error.response?.data || error.message,
     });
   }
 });
@@ -85,55 +72,55 @@ router.post('/create_link_token', async (req, res) => {
     const { userId } = req.body;
     const clientUserId = userId || `user_${Date.now()}`;
     const linkToken = await plaid.createLinkToken(clientUserId);
-    
+
     res.json({
       success: true,
       link_token: linkToken.link_token,
-      expiration: linkToken.expiration
+      expiration: linkToken.expiration,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
       error: 'Failed to create link token',
-      details: error.response?.data || error.message
+      details: error.response?.data || error.message,
     });
   }
 });
 
-// Exchange public token for access token - FIXED UUID VERSION
+// Exchange public token for access token and save data with real user ID
 router.post('/exchange_public_token', async (req, res) => {
   try {
-    const { public_token, user_id } = req.body;
-
-    if (!public_token) {
-      return res.status(400).json({
-        success: false,
-        error: 'public_token is required'
-      });
+    const supabaseToken = req.headers.authorization?.split('Bearer ')[1];
+    if (!supabaseToken) {
+      return res.status(401).json({ success: false, error: 'Missing Supabase token' });
     }
 
-    // Generate a proper UUID for the user
-    const userId = user_id || randomUUID();
-    console.log('Exchanging token for user UUID:', userId);
+    const { data: userData, error: userError } = await supabaseService.supabase.auth.getUser(supabaseToken);
+    if (userError || !userData?.user?.id) {
+      return res.status(401).json({ success: false, error: 'Invalid Supabase token' });
+    }
+
+    const userId = userData.user.id;
+    const { public_token } = req.body;
+
+    if (!public_token) {
+      return res.status(400).json({ success: false, error: 'public_token is required' });
+    }
+
+    console.log('Exchanging token for Supabase user:', userId);
 
     const exchangeResponse = await plaid.exchangePublicToken(public_token);
-    console.log('Token exchange successful');
-
     const accountsResponse = await plaid.getAccounts(exchangeResponse.access_token);
-    console.log('Accounts retrieved:', accountsResponse.accounts.length);
 
     const savedAccounts = [];
     for (const account of accountsResponse.accounts) {
       try {
         const savedAccount = await supabaseService.saveUserAccount(
-          userId, 
-          account, 
+          userId,
+          account,
           exchangeResponse.access_token
         );
-        if (savedAccount) {
-          savedAccounts.push(savedAccount);
-          console.log('Saved account:', account.name);
-        }
+        if (savedAccount) savedAccounts.push(savedAccount);
       } catch (error) {
         console.error('Error saving account:', account.name, error.message);
       }
@@ -151,9 +138,12 @@ router.post('/exchange_public_token', async (req, res) => {
         if (transactionData.transactions && transactionData.transactions.length > 0) {
           const savedAccount = savedAccounts.find(sa => sa.account_id === account.account_id);
           if (savedAccount) {
-            const result = await supabaseService.saveTransactions(savedAccount.id, transactionData.transactions);
+            const result = await supabaseService.saveTransactions(
+              userId,
+              savedAccount.id,
+              transactionData.transactions
+            );
             totalTransactions += result.saved || transactionData.transactions.length;
-            console.log(`Imported ${transactionData.transactions.length} transactions for ${account.name}`);
           }
         }
       } catch (error) {
@@ -169,7 +159,6 @@ router.post('/exchange_public_token', async (req, res) => {
       saved_accounts: savedAccounts,
       transactions_imported: totalTransactions,
       user_id: userId,
-      institution: accountsResponse.item
     });
 
   } catch (error) {
@@ -177,7 +166,7 @@ router.post('/exchange_public_token', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to exchange public token',
-      details: error.response?.data || error.message
+      details: error.response?.data || error.message,
     });
   }
 });
@@ -187,28 +176,23 @@ router.get('/user/:userId/transactions', async (req, res) => {
   try {
     const { userId } = req.params;
     const { limit = 50, offset = 0 } = req.query;
-    
-    console.log(`Getting transactions for user: ${userId}`);
-    
+
     const transactions = await supabaseService.getUserTransactions(
-      userId, 
-      parseInt(limit), 
+      userId,
+      parseInt(limit),
       parseInt(offset)
     );
-    
-    console.log(`Returning ${transactions.length} transactions`);
-    
+
     res.json({
       success: true,
       transactions: transactions,
-      count: transactions.length
+      count: transactions.length,
     });
   } catch (error) {
-    console.error('Get transactions error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch transactions',
-      details: error.message
+      details: error.message,
     });
   }
 });
@@ -218,33 +202,33 @@ router.put('/transaction/:transactionId/category', async (req, res) => {
   try {
     const { transactionId } = req.params;
     const { category, subcategory } = req.body;
-    
+
     const updatedTransaction = await supabaseService.updateTransactionCategory(
-      transactionId, 
-      category, 
+      transactionId,
+      category,
       subcategory
     );
-    
+
     res.json({
       success: true,
-      transaction: updatedTransaction
+      transaction: updatedTransaction,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
       error: 'Failed to update transaction category',
-      details: error.message
+      details: error.message,
     });
   }
 });
 
-// Debug route
+// Plaid config debug route
 router.get('/debug', async (req, res) => {
   try {
     const config = {
       clientId: process.env.PLAID_CLIENT_ID ? 'Set' : 'MISSING',
       secret: process.env.PLAID_SECRET ? 'Set' : 'MISSING',
-      env: process.env.PLAID_ENV
+      env: process.env.PLAID_ENV,
     };
 
     const linkTokenResponse = await plaid.createLinkToken('debug_user_123');
@@ -253,14 +237,14 @@ router.get('/debug', async (req, res) => {
       success: true,
       message: 'Plaid credentials are working!',
       config: config,
-      linkTokenCreated: !!linkTokenResponse.link_token
+      linkTokenCreated: !!linkTokenResponse.link_token,
     });
 
   } catch (error) {
     res.status(500).json({
       success: false,
       error: 'Plaid debug failed',
-      details: error.response?.data || error.message
+      details: error.response?.data || error.message,
     });
   }
 });
