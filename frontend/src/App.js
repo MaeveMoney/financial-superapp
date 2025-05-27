@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Box, Container, Heading, Text, VStack, Tabs, TabList, TabPanels, Tab, TabPanel } from '@chakra-ui/react';
 import PlaidLinkComponent from './components/PlaidLinkComponent';
 import TransactionList from './components/TransactionList';
+import BudgetDashboard from './components/BudgetDashboard';
 
 function App() {
   const [connectedData, setConnectedData] = useState(null);
@@ -74,7 +75,11 @@ function App() {
                 </TabPanel>
                 
                 <TabPanel>
-                  <Text>Budget tools coming soon...</Text>
+                  {userId ? (
+                    <BudgetDashboard userId={userId} />
+                  ) : (
+                    <Text color="red.500">Error: No user ID available to load budgets</Text>
+                  )}
                 </TabPanel>
                 
                 <TabPanel>
