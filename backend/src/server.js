@@ -53,9 +53,11 @@ app.get('/api/test-direct', async (req, res) => {
 // Load API routes
 const plaidRoutes = require('./routes/plaid');
 const budgetRoutes = require('./routes/budget');
+const userRoutes = require('./routes/user'); // NEW user routes
 
 app.use('/api/plaid', plaidRoutes);
 app.use('/api/budget', budgetRoutes);
+app.use('/api/user', userRoutes); // Mount user routes
 
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
