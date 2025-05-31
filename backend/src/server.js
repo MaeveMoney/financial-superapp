@@ -1,7 +1,6 @@
 // backend/src/server.js
 
 const express = require('express');
-const cors = require('cors');
 const helmet = require('helmet');
 require('dotenv').config();
 
@@ -9,20 +8,20 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // -----------------------------
-// 1. CORS Configuration
+// 1. Manual CORS Middleware
 // -----------------------------
-app.use(
-  cors({
-    origin: '*', // allow all origins temporarily
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
-  })
-);
-
-// Handle preflight OPTIONS for all routes
-app.options('*', (req, res) => {
-  res.sendStatus(200);
+app.use((req, res, next) => {
+  // Allow all origins for now
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  // Allow these headers in requests
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  // Allow these HTTP methods
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  // If this is a preflight OPTIONS request, immediately send back 200
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
 });
 
 // -----------------------------
@@ -44,7 +43,7 @@ app.use((req, res, next) => {
 // -----------------------------
 // Health check: confirm server is running
 app.get('/', (req, res) => {
-  res.json({
+  return res.json({
     message: 'Financial Super-App API is running!',
     timestamp: new Date().toISOString(),
     version: '1.0.0',
@@ -54,23 +53,23 @@ app.get('/', (req, res) => {
 
 // Detailed health: uptime, timestamp
 app.get('/health', (req, res) => {
-  res.json({
+  return res.json({
     status: 'healthy',
     uptime: process.uptime(),
     timestamp: new Date().toISOString()
   });
 });
 
-// CORS test: returns headers so you can verify CORS in the browser
+// CORS test: returns a header so you can verify CORS
 app.get('/cors-test', (req, res) => {
-  res.set('X-Custom-Header', 'CORS test works');
-  res.json({ success: true, message: 'CORS is working!' });
+  res.set('X-Custom-Header', 'CORS test successful');
+  return res.json({ success: true, message: 'CORS is working!' });
 });
 
 // -----------------------------
-// 5. Mounting Your API Routes
+// 5. Mount Your API Routes
 // -----------------------------
-// Make sure these files exist:
+// Ensure these files exist and export routers:
 //   backend/src/routes/plaid.js
 //   backend/src/routes/budget.js
 //   backend/src/routes/user.js
@@ -84,12 +83,10 @@ app.use('/api/budget', budgetRoutes);
 app.use('/api/user', userRoutes);
 
 // -----------------------------
-// 6. Catch-All Fallback (for debugging)
+// 6. Fallback for Any Other Route
 // -----------------------------
 app.all('*', (req, res) => {
-  res
-    .status(200)
-    .send(`You’ve reached ${req.method} ${req.url} — make sure this route exists.`);
+  return res.status(200).send(`You've reached ${req.method} ${req.url}`);
 });
 
 // -----------------------------
@@ -97,5 +94,5 @@ app.all('*', (req, res) => {
 // -----------------------------
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`CORS is enabled for all origins`);
+  console.log(`CORS headers are sent for * (all origins)`);
 });
