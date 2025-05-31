@@ -1,3 +1,5 @@
+// backend/src/server.js
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -6,20 +8,41 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// SIMPLIFIED CORS: allow all origins (for now)
+// -----------------------------
+// 1. CORS Configuration
+// -----------------------------
 app.use(
   cors({
-    origin: '*',
+    origin: '*', // allow all origins temporarily
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true
   })
 );
 
+// Handle preflight OPTIONS for all routes
+app.options('*', (req, res) => {
+  res.sendStatus(200);
+});
+
+// -----------------------------
+// 2. Security & JSON Parsing
+// -----------------------------
 app.use(helmet());
 app.use(express.json());
 
-// Basic health check
+// -----------------------------
+// 3. Request Logging (for debugging)
+// -----------------------------
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+
+// -----------------------------
+// 4. Health + CORS-Test Endpoints
+// -----------------------------
+// Health check: confirm server is running
 app.get('/', (req, res) => {
   res.json({
     message: 'Financial Super-App API is running!',
@@ -29,6 +52,7 @@ app.get('/', (req, res) => {
   });
 });
 
+// Detailed health: uptime, timestamp
 app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
@@ -37,7 +61,20 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Import and mount your routes
+// CORS test: returns headers so you can verify CORS in the browser
+app.get('/cors-test', (req, res) => {
+  res.set('X-Custom-Header', 'CORS test works');
+  res.json({ success: true, message: 'CORS is working!' });
+});
+
+// -----------------------------
+// 5. Mounting Your API Routes
+// -----------------------------
+// Make sure these files exist:
+//   backend/src/routes/plaid.js
+//   backend/src/routes/budget.js
+//   backend/src/routes/user.js
+
 const plaidRoutes = require('./routes/plaid');
 const budgetRoutes = require('./routes/budget');
 const userRoutes = require('./routes/user');
@@ -46,13 +83,19 @@ app.use('/api/plaid', plaidRoutes);
 app.use('/api/budget', budgetRoutes);
 app.use('/api/user', userRoutes);
 
-// Catch-all for any other route
+// -----------------------------
+// 6. Catch-All Fallback (for debugging)
+// -----------------------------
 app.all('*', (req, res) => {
-  res.status(200).send(`You've reached ${req.method} ${req.url}`);
+  res
+    .status(200)
+    .send(`You’ve reached ${req.method} ${req.url} — make sure this route exists.`);
 });
 
-// Start the server
+// -----------------------------
+// 7. Start the Server
+// -----------------------------
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`CORS is temporarily set to '*' for all origins`);
+  console.log(`CORS is enabled for all origins`);
 });
