@@ -248,5 +248,27 @@ router.get('/debug', async (req, res) => {
     });
   }
 });
+// GET /api/plaid/user/:userId/accounts
+router.get('/user/:userId/accounts', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Use SupabaseService method to fetch accounts from user_accounts table
+    const accounts = await supabaseService.getUserAccounts(userId);
+
+    return res.json({
+      success: true,
+      accounts
+    });
+  } catch (error) {
+    console.error('Error fetching user accounts:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch accounts',
+      details: error.message
+    });
+  }
+});
+
 
 module.exports = router;
