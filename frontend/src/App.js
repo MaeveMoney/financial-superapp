@@ -1,3 +1,5 @@
+// frontend/src/App.js
+
 import React, { useEffect, useState } from 'react';
 import {
   Container,
@@ -26,14 +28,18 @@ function App() {
   // Load session and save user
   useEffect(() => {
     const init = async () => {
+      console.log('🔄 Checking Supabase session...');
       const {
         data: { session },
       } = await supabase.auth.getSession();
 
       if (session?.user) {
+        console.log('✅ User is signed in:', session.user.email);
         setUser(session.user);
 
+        // Save user to backend
         try {
+          console.log('📡 Calling /api/user/save');
           await axios.post(
             `${process.env.REACT_APP_BACKEND_URL}/api/user/save`,
             {},
@@ -43,9 +49,12 @@ function App() {
               },
             }
           );
+          console.log('✅ User saved to backend');
         } catch (err) {
-          console.error('Error saving user:', err);
+          console.error('❌ Error saving user:', err);
         }
+      } else {
+        console.log('ℹ️ No user session found');
       }
 
       setLoading(false);
@@ -53,14 +62,13 @@ function App() {
 
     init();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(
+    const { data: listener } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setUser(session?.user ?? null);
       }
     );
-
     return () => {
-      authListener.subscription.unsubscribe();
+      listener.subscription.unsubscribe();
     };
   }, []);
 
@@ -68,13 +76,20 @@ function App() {
   const fetchLinkToken = async () => {
     if (!user) return;
     try {
+      console.log('📡 Calling /api/plaid/create_link_token');
       const response = await axios.post(
         `${process.env.REACT_APP_BACKEND_URL}/api/plaid/create_link_token`,
-        { userId: user.id }
+        { userId: user.id },
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
       );
+      console.log('🔄 Link token received:', response.data.link_token);
       setLinkToken(response.data.link_token);
     } catch (error) {
-      console.error('Error creating Plaid link token:', error);
+      console.error('❌ Error creating Plaid link token:', error);
     }
   };
 
@@ -89,6 +104,7 @@ function App() {
     token: linkToken,
     onSuccess: async (public_token) => {
       try {
+        console.log('🔄 Exchanging public token for access token');
         const session = await supabase.auth.getSession();
         const accessToken = session.data.session?.access_token;
 
@@ -101,7 +117,7 @@ function App() {
             },
           }
         );
-
+        console.log('✅ Plaid exchange succeeded');
         toast({
           title: 'Account linked!',
           description: 'Your financial data has been imported.',
@@ -110,7 +126,7 @@ function App() {
           isClosable: true,
         });
       } catch (err) {
-        console.error('Token exchange error:', err);
+        console.error('❌ Token exchange error:', err);
         toast({
           title: 'Something went wrong.',
           description: 'Failed to link your account.',
@@ -123,10 +139,12 @@ function App() {
   });
 
   const signIn = async () => {
+    console.log('🔄 Signing in with Google...');
     await supabase.auth.signInWithOAuth({ provider: 'google' });
   };
 
   const signOut = async () => {
+    console.log('🔄 Signing out...');
     await supabase.auth.signOut();
   };
 
