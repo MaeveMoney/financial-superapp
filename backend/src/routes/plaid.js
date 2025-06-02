@@ -3,17 +3,17 @@
 const express = require('express');
 const PlaidService = require('../services/plaid');
 const SupabaseService = require('../services/supabase');
+const { randomUUID } = require('crypto');
 const router = express.Router();
 
 const plaid = new PlaidService();
 const supabaseService = new SupabaseService();
 
-// ---------------------------------------------------
-// 1. TEST DB PERMISSIONS
-// ---------------------------------------------------
+//
+// 1. Test database permissions (unchanged)
+//
 router.get('/test-db-permissions', async (req, res) => {
   try {
-    console.log('🔍 [plaid] Testing database permissions…');
     const testRecord = {
       user_id: '123e4567-e89b-12d3-a456-426614174000',
       account_id: 'test_account_123',
@@ -23,23 +23,26 @@ router.get('/test-db-permissions', async (req, res) => {
       currency: 'CAD',
       is_active: true,
     };
+
     const { data, error } = await supabaseService.supabase
       .from('user_accounts')
       .insert(testRecord)
       .select();
+
     if (error) throw error;
 
-    console.log('✅ [plaid] Test record inserted:', data);
     await supabaseService.supabase
       .from('user_accounts')
       .delete()
-      .eq('user_id', testRecord.user_id);
+      .eq('user_id', '123e4567-e89b-12d3-a456-426614174000');
 
-    console.log('🧹 [plaid] Test record cleaned up');
-    return res.json({ success: true, message: 'Database permissions working!' });
+    res.json({
+      success: true,
+      message: 'Database permissions working!',
+      test_record_created: true,
+    });
   } catch (error) {
-    console.error('❌ [plaid] Permission test failed:', error);
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       error: 'Database permission test failed',
       details: error.message,
@@ -48,22 +51,20 @@ router.get('/test-db-permissions', async (req, res) => {
   }
 });
 
-// ---------------------------------------------------
-// 2. PLAID LINK TOKEN TEST (GET)
-// ---------------------------------------------------
+//
+// 2. GET /api/plaid/test-connection (unchanged)
+//
 router.get('/test-connection', async (req, res) => {
   try {
-    console.log('🔍 [plaid] Testing Plaid link‐creation…');
     const linkToken = await plaid.createLinkToken('test_user_browser');
-    return res.json({
+    res.json({
       success: true,
       message: 'Plaid connection working via GET request!',
       link_token_created: !!linkToken.link_token,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('❌ [plaid] Connection test failed:', error);
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       error: 'Plaid connection failed',
       details: error.response?.data || error.message,
@@ -71,25 +72,22 @@ router.get('/test-connection', async (req, res) => {
   }
 });
 
-// ---------------------------------------------------
-// 3. CREATE LINK TOKEN FOR PLAID LINK (POST)
-// ---------------------------------------------------
+//
+// 3. POST /api/plaid/create_link_token (unchanged)
+//
 router.post('/create_link_token', async (req, res) => {
   try {
     const { userId } = req.body;
-    if (!userId) console.warn('⚠️ [plaid] No userId provided, generating fallback');
     const clientUserId = userId || `user_${Date.now()}`;
-    console.log(`🔍 [plaid] Creating link token for client_user_id="${clientUserId}"`);
-    const linkTokenResponse = await plaid.createLinkToken(clientUserId);
-    console.log('✅ [plaid] Link token created:', linkTokenResponse.link_token);
-    return res.json({
+    const linkToken = await plaid.createLinkToken(clientUserId);
+
+    res.json({
       success: true,
-      link_token: linkTokenResponse.link_token,
-      expiration: linkTokenResponse.expiration,
+      link_token: linkToken.link_token,
+      expiration: linkToken.expiration,
     });
   } catch (error) {
-    console.error('❌ [plaid] Failed to create link token:', error);
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       error: 'Failed to create link token',
       details: error.response?.data || error.message,
@@ -97,95 +95,89 @@ router.post('/create_link_token', async (req, res) => {
   }
 });
 
-// ---------------------------------------------------
-// 4. EXCHANGE PUBLIC TOKEN & SAVE ACCOUNTS + TRANSACTIONS (POST)
-// ---------------------------------------------------
+//
+// 4. POST /api/plaid/exchange_public_token (unchanged except for saving user_id)
+//
 router.post('/exchange_public_token', async (req, res) => {
   try {
-    // 1) Validate Supabase JWT
-    const supabaseJwt = req.headers.authorization?.split('Bearer ')[1];
-    if (!supabaseJwt) {
-      console.warn('⚠️ [plaid] Missing Supabase token in headers');
+    // Extract Supabase JWT from Authorization header:
+    const supabaseToken = req.headers.authorization?.split('Bearer ')[1];
+    if (!supabaseToken) {
       return res.status(401).json({ success: false, error: 'Missing Supabase token' });
     }
 
-    const { data: { user }, error: userError } = await supabaseService.supabase.auth.getUser(supabaseJwt);
-    if (userError || !user?.id) {
-      console.error('❌ [plaid] Invalid Supabase token:', userError || 'No user returned');
+    const { data: userData, error: userError } = await supabaseService.supabase.auth.getUser(supabaseToken);
+    if (userError || !userData?.user?.id) {
       return res.status(401).json({ success: false, error: 'Invalid Supabase token' });
     }
-    const userId = user.id;
-    console.log(`🔍 [plaid] Exchanging public token for userId="${userId}"`);
+    const userId = userData.user.id;
 
     const { public_token } = req.body;
     if (!public_token) {
-      console.warn('⚠️ [plaid] public_token missing in request body');
       return res.status(400).json({ success: false, error: 'public_token is required' });
     }
 
-    // 2) Exchange for access_token
+    console.log('Exchanging token for Supabase user:', userId);
+
     const exchangeResponse = await plaid.exchangePublicToken(public_token);
-    console.log('✅ [plaid] Received access_token and item_id:', exchangeResponse.access_token, exchangeResponse.item_id);
-
-    // 3) Fetch accounts
     const accountsResponse = await plaid.getAccounts(exchangeResponse.access_token);
-    console.log(`🔍 [plaid] Retrieved ${accountsResponse.accounts.length} accounts from Plaid`);
 
-    // 4) Save each account
+    // Save each account & its transactions under the real userId
     const savedAccounts = [];
     for (const account of accountsResponse.accounts) {
       try {
-        const saved = await supabaseService.saveUserAccount(
+        const savedAccount = await supabaseService.saveUserAccount(
           userId,
           account,
           exchangeResponse.access_token
         );
-        if (saved) {
-          savedAccounts.push(saved);
-          console.log(`✅ [plaid] Saved account "${account.name}" (DB ID=${saved.id})`);
-        }
-      } catch (saveError) {
-        console.error(`❌ [plaid] Error saving account "${account.name}":`, saveError.message);
+        if (savedAccount) savedAccounts.push(savedAccount);
+      } catch (error) {
+        console.error('Error saving account:', account.name, error.message);
       }
     }
 
-    // 5) Fetch & save transactions for each saved account
     let totalTransactions = 0;
-    for (const savedAccount of savedAccounts) {
+    for (const account of accountsResponse.accounts) {
       try {
         const transactionData = await plaid.getTransactions(
           exchangeResponse.access_token,
           new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
           new Date()
         );
-        const txnList = transactionData.transactions || [];
-        if (txnList.length > 0) {
-          const result = await supabaseService.saveTransactions(
-            savedAccount.id,    // <— account’s DB ID
-            txnList             // <— array of transaction objects
+        if (transactionData.transactions && transactionData.transactions.length > 0) {
+          const savedAccount = savedAccounts.find(
+            (sa) => sa.account_id === account.account_id
           );
-          totalTransactions += result.saved || txnList.length;
-          console.log(`✅ [plaid] Imported ${txnList.length} transactions for "${savedAccount.account_name}"`);
-        } else {
-          console.log(`ℹ️ [plaid] No new transactions for "${savedAccount.account_name}"`);
+          if (savedAccount) {
+            const result = await supabaseService.saveTransactions(
+              savedAccount.id,
+              transactionData.transactions
+            );
+            totalTransactions += result.saved || transactionData.transactions.length;
+          }
         }
-      } catch (txnError) {
-        console.error(`❌ [plaid] Error importing transactions for "${savedAccount.account_name}":`, txnError.message);
+      } catch (error) {
+        console.error(
+          'Error importing transactions for account:',
+          account.name,
+          error.message
+        );
       }
     }
 
-    // 6) Return response
-    return res.json({
+    res.json({
       success: true,
       access_token: exchangeResponse.access_token,
       item_id: exchangeResponse.item_id,
+      accounts: accountsResponse.accounts,
       saved_accounts: savedAccounts,
       transactions_imported: totalTransactions,
       user_id: userId,
     });
   } catch (error) {
-    console.error('❌ [plaid] exchange_public_token error:', error);
-    return res.status(500).json({
+    console.error('Exchange token error:', error);
+    res.status(500).json({
       success: false,
       error: 'Failed to exchange public token',
       details: error.response?.data || error.message,
@@ -193,53 +185,108 @@ router.post('/exchange_public_token', async (req, res) => {
   }
 });
 
-// ---------------------------------------------------
-// 5. GET USER’S TRANSACTIONS WITH FILTERS, SEARCH, PAGINATION (GET)
-// ---------------------------------------------------
+//
+// 5. GET /api/plaid/user/:userId/transactions  (UPDATED to honor query params)
+//
 router.get('/user/:userId/transactions', async (req, res) => {
   try {
     const { userId } = req.params;
     const {
       limit = 50,
       offset = 0,
-      start_date = null,
-      end_date = null,
-      search = null,
-      category = null,
-      recurring = null,
-      is_manual = null,
+      start_date,
+      end_date,
+      search,
+      category,
+      recurring,
+      is_manual,
     } = req.query;
 
-    console.log(`🔍 [plaid] Fetching transactions for userId="${userId}"`);
-    console.log('   Query params:', { limit, offset, start_date, end_date, search, category, recurring, is_manual });
+    // 1) Find that user’s “active” account IDs first
+    const { data: accounts, error: accountsError } = await supabaseService.supabase
+      .from('user_accounts')
+      .select('id, account_name, account_type')
+      .eq('user_id', userId)
+      .eq('is_active', true);
 
-    // Convert recurring/is_manual to booleans if present
-    const recurringBool = recurring === 'true' ? true
-                      : recurring === 'false' ? false
-                      : null;
-    const isManualBool = is_manual === 'true' ? true
-                       : is_manual === 'false' ? false
-                       : null;
+    if (accountsError) throw accountsError;
+    if (!accounts || accounts.length === 0) {
+      return res.json({ success: true, transactions: [], count: 0 });
+    }
+    const accountIds = accounts.map((acc) => acc.id);
 
-    const transactions = await supabaseService.getUserTransactions(userId, {
-      limit: parseInt(limit),
-      offset: parseInt(offset),
-      start_date: start_date || null,
-      end_date: end_date || null,
-      search: search || null,
-      category: category || null,
-      recurring: recurringBool,
-      is_manual: isManualBool,
+    // 2) Build our Supabase query with all optional filters
+    let query = supabaseService.supabase
+      .from('transactions')
+      .select('*')
+      .in('account_id', accountIds)
+      .order('date', { ascending: false });
+
+    // a) Date range
+    if (start_date) {
+      query = query.gte('date', start_date);
+    }
+    if (end_date) {
+      query = query.lte('date', end_date);
+    }
+
+    // b) Text search on description or merchant_name
+    if (search) {
+      // Supabase doesn’t have a built‐in “ILIKE or ILIKE” on two columns in a single call,
+      // so we do .or()—( this will search description ILIKE '%search%' OR merchant_name ILIKE '%search%' )
+      const escaped = search.replace(/'/g, "''");
+      query = query.or(
+        `description.ilike.%${escaped}%,merchant_name.ilike.%${escaped}%`
+      );
+    }
+
+    // c) Filter by category exactly
+    if (category) {
+      query = query.eq('category', category);
+    }
+
+    // d) Filter by is_recurring
+    if (recurring === 'true') {
+      query = query.eq('is_recurring', true);
+    } else if (recurring === 'false') {
+      query = query.eq('is_recurring', false);
+    }
+
+    // e) Filter by is_manual
+    if (is_manual === 'true') {
+      query = query.eq('is_manual', true);
+    } else if (is_manual === 'false') {
+      query = query.eq('is_manual', false);
+    }
+
+    // f) Pagination: limit & offset
+    query = query.limit(parseInt(limit)).offset(parseInt(offset));
+
+    // 3) Run final query
+    const { data: transactions, error: txnError } = await query;
+    if (txnError) throw txnError;
+
+    // 4) Attach account_name/account_type (could have done this in SQL, 
+    //    but for clarity we’ll merge manually)
+    const transactionsWithAccounts = (transactions || []).map((txn) => {
+      const acct = accounts.find((a) => a.id === txn.account_id);
+      return {
+        ...txn,
+        user_accounts: {
+          account_name: acct?.account_name || 'Unknown',
+          account_type: acct?.account_type || 'unknown',
+        },
+      };
     });
 
-    return res.json({
+    res.json({
       success: true,
-      transactions,
-      count: transactions.length,
+      transactions: transactionsWithAccounts,
+      count: transactionsWithAccounts.length,
     });
   } catch (error) {
-    console.error('❌ [plaid] get transactions error:', error);
-    return res.status(500).json({
+    console.error('Get transactions error:', error);
+    res.status(500).json({
       success: false,
       error: 'Failed to fetch transactions',
       details: error.message,
@@ -247,27 +294,22 @@ router.get('/user/:userId/transactions', async (req, res) => {
   }
 });
 
-// ---------------------------------------------------
-// 6. UPDATE SINGLE TRANSACTION’S CATEGORY (PUT)
-// ---------------------------------------------------
+//
+// 6. PUT /api/plaid/transaction/:transactionId/category  (unchanged)
+//
 router.put('/transaction/:transactionId/category', async (req, res) => {
   try {
     const { transactionId } = req.params;
     const { category, subcategory } = req.body;
 
-    console.log(`🔄 [plaid] Update category for txnId="${transactionId}" → category="${category}", subcategory="${subcategory}"`);
     const updatedTransaction = await supabaseService.updateTransactionCategory(
       transactionId,
       category,
       subcategory
     );
-    return res.json({
-      success: true,
-      transaction: updatedTransaction,
-    });
+    res.json({ success: true, transaction: updatedTransaction });
   } catch (error) {
-    console.error('❌ [plaid] Failed to update transaction category:', error);
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       error: 'Failed to update transaction category',
       details: error.message,
@@ -275,123 +317,108 @@ router.put('/transaction/:transactionId/category', async (req, res) => {
   }
 });
 
-// ---------------------------------------------------
-// 7. BULK UPDATE TRANSACTIONS’ CATEGORY (POST)
-// ---------------------------------------------------
+//
+// 7. POST /api/plaid/user/:userId/transactions/bulk-category (NEW)
+//
 router.post('/user/:userId/transactions/bulk-category', async (req, res) => {
   try {
     const { userId } = req.params;
-    const { transactionIds = [], category, subcategory = null } = req.body;
-
+    const { transactionIds, category, subcategory } = req.body;
     if (!Array.isArray(transactionIds) || transactionIds.length === 0) {
-      return res.status(400).json({ success: false, error: 'transactionIds must be a non-empty array' });
+      return res.status(400).json({ success: false, error: 'No transaction IDs provided' });
     }
+    // Update all matching transactions belonging to those IDs:
+    const { data: updatedRows, error: updateError } = await supabaseService.supabase
+      .from('transactions')
+      .update({ category, subcategory, updated_at: new Date().toISOString() })
+      .in('transaction_id', transactionIds)
+      .select();
 
-    console.log(`🔄 [plaid] Bulk update ${transactionIds.length} txns → category="${category}", subcategory="${subcategory}"`);
-    const updatedRows = await supabaseService.bulkUpdateTransactionCategory(
-      transactionIds,
-      category,
-      subcategory
-    );
-
-    return res.json({
+    if (updateError) throw updateError;
+    res.json({
       success: true,
       updatedCount: updatedRows.length,
       updatedRows,
     });
   } catch (error) {
-    console.error('❌ [plaid] Bulk update category error:', error);
-    return res.status(500).json({
+    console.error('Bulk update error:', error);
+    res.status(500).json({
       success: false,
-      error: 'Failed to bulk update transaction categories',
+      error: 'Bulk update failed',
       details: error.message,
     });
   }
 });
 
-// ---------------------------------------------------
-// 8. UPDATE “IS_RECURRING” FLAG (PUT)
-// ---------------------------------------------------
+//
+// 8. PUT /api/plaid/transaction/:transactionId/recurring (NEW)
+//
 router.put('/transaction/:transactionId/recurring', async (req, res) => {
   try {
     const { transactionId } = req.params;
     const { is_recurring } = req.body;
-    console.log(`🔄 [plaid] Update is_recurring for txnId="${transactionId}" → ${is_recurring}`);
-    const updated = await supabaseService.updateTransactionRecurring(transactionId, is_recurring);
-    return res.json({ success: true, transaction: updated });
+    const { data: updatedRow, error: updateError } = await supabaseService.supabase
+      .from('transactions')
+      .update({ is_recurring, updated_at: new Date().toISOString() })
+      .eq('transaction_id', transactionId)
+      .select()
+      .single();
+    if (updateError) throw updateError;
+    res.json({ success: true, transaction: updatedRow });
   } catch (error) {
-    console.error('❌ [plaid] Failed to update recurring flag:', error);
-    return res.status(500).json({
+    console.error('Error toggling recurring:', error);
+    res.status(500).json({
       success: false,
-      error: 'Failed to update recurring flag',
+      error: 'Failed to toggle recurring',
       details: error.message,
     });
   }
 });
 
-// ---------------------------------------------------
-// 9. UPDATE “IS_MANUAL” FLAG (PUT)
-// ---------------------------------------------------
+//
+// 9. PUT /api/plaid/transaction/:transactionId/manual (NEW)
+//
 router.put('/transaction/:transactionId/manual', async (req, res) => {
   try {
     const { transactionId } = req.params;
     const { is_manual } = req.body;
-    console.log(`🔄 [plaid] Update is_manual for txnId="${transactionId}" → ${is_manual}`);
-    const updated = await supabaseService.updateTransactionManual(transactionId, is_manual);
-    return res.json({ success: true, transaction: updated });
+    const { data: updatedRow, error: updateError } = await supabaseService.supabase
+      .from('transactions')
+      .update({ is_manual, updated_at: new Date().toISOString() })
+      .eq('transaction_id', transactionId)
+      .select()
+      .single();
+    if (updateError) throw updateError;
+    res.json({ success: true, transaction: updatedRow });
   } catch (error) {
-    console.error('❌ [plaid] Failed to update manual flag:', error);
-    return res.status(500).json({
+    console.error('Error toggling manual:', error);
+    res.status(500).json({
       success: false,
-      error: 'Failed to update manual flag',
+      error: 'Failed to toggle manual',
       details: error.message,
     });
   }
 });
 
-// ---------------------------------------------------
-// 10. GET USER’S LINKED ACCOUNTS (GET)
-// ---------------------------------------------------
-router.get('/user/:userId/accounts', async (req, res) => {
-  try {
-    const { userId } = req.params;
-    console.log(`🔍 [plaid] Fetching linked accounts for userId="${userId}"`);
-    const accounts = await supabaseService.getUserAccounts(userId);
-    return res.json({
-      success: true,
-      accounts,
-    });
-  } catch (error) {
-    console.error('❌ [plaid] get accounts error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to fetch accounts',
-      details: error.message,
-    });
-  }
-});
-
-// ---------------------------------------------------
-// 11. PLAID CONFIG DEBUG (GET)
-// ---------------------------------------------------
+//
+// 10. GET /api/plaid/debug  (unchanged)
+//
 router.get('/debug', async (req, res) => {
   try {
-    console.log('🔍 [plaid] Running debug endpoint…');
     const config = {
       clientId: process.env.PLAID_CLIENT_ID ? 'Set' : 'MISSING',
       secret: process.env.PLAID_SECRET ? 'Set' : 'MISSING',
       env: process.env.PLAID_ENV,
     };
     const linkTokenResponse = await plaid.createLinkToken('debug_user_123');
-    return res.json({
+    res.json({
       success: true,
       message: 'Plaid credentials are working!',
       config,
       linkTokenCreated: !!linkTokenResponse.link_token,
     });
   } catch (error) {
-    console.error('❌ [plaid] Debug failed:', error);
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       error: 'Plaid debug failed',
       details: error.response?.data || error.message,
